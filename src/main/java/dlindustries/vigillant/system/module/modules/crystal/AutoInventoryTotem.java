@@ -1,138 +1,153 @@
-package dlindustries.vigillant.system.module.modules.crystal;
+package dev.potato.lucid.module.modules.cpvp;
 
-import dlindustries.vigillant.system.event.events.TickListener;
-import dlindustries.vigillant.system.module.Category;
-import dlindustries.vigillant.system.module.Module;
-import dlindustries.vigillant.system.module.setting.BooleanSetting;
-import dlindustries.vigillant.system.module.setting.ModeSetting;
-import dlindustries.vigillant.system.module.setting.NumberSetting;
-import dlindustries.vigillant.system.utils.EncryptedString;
-import dlindustries.vigillant.system.utils.FakeInvScreen;
-import dlindustries.vigillant.system.utils.InventoryUtils;
-import dlindustries.vigillant.system.utils.TimerUtils;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.screen.slot.SlotActionType;
-
+import dev.potato.lucid.event.events.TickListener;
+import dev.potato.lucid.module.Category;
+import dev.potato.lucid.module.Module;
+import dev.potato.lucid.module.setting.BooleanSetting;
+import dev.potato.lucid.module.setting.ModeSetting;
+import dev.potato.lucid.module.setting.NumberSetting;
+import dev.potato.lucid.module.setting.Setting;
+import dev.potato.lucid.utils.EncryptedString;
+import dev.potato.lucid.utils.FakeInvScreen;
+import dev.potato.lucid.utils.InventoryUtils;
+import dev.potato.lucid.utils.TimerUtils;
+import net.minecraft.class_1661;
+import net.minecraft.class_1713;
+import net.minecraft.class_1723;
+import net.minecraft.class_1799;
+import net.minecraft.class_1802;
+import net.minecraft.class_490;
 
 public final class AutoInventoryTotem extends Module implements TickListener {
-	public enum Mode {
-		Blatant, Random
-	}
+   private final ModeSetting<AutoInventoryTotem.Mode> mode;
+   private final NumberSetting delay;
+   private final BooleanSetting hotbar;
+   private final NumberSetting totemSlot;
+   private final BooleanSetting autoSwitch;
+   private final BooleanSetting forceTotem;
+   private final BooleanSetting autoOpen;
+   private final NumberSetting stayOpenFor;
+   int clock;
+   int closeClock;
+   TimerUtils openTimer;
+   TimerUtils closeTimer;
 
-	private final ModeSetting<Mode> mode = new ModeSetting<>(EncryptedString.of("Mode"), Mode.Blatant, Mode.class)
-			.setDescription(EncryptedString.of("Whether to randomize the toteming pattern or no"));
-	private final NumberSetting delay = new NumberSetting(EncryptedString.of("Delay"), 0, 20, 1, 1);
-	private final BooleanSetting hotbar = new BooleanSetting(EncryptedString.of("Hotbar"), true).setDescription(EncryptedString.of("Puts a totem in your hotbar as well, if enabled (Setting below will work if this is enabled)"));
-	private final NumberSetting totemSlot = new NumberSetting(EncryptedString.of("Totem Slot"), 1, 9, 9, 1)
-			.setDescription(EncryptedString.of("Your preferred totem slot"));
-	private final BooleanSetting autoSwitch = new BooleanSetting(EncryptedString.of("Auto Switch"), false)
-			.setDescription(EncryptedString.of("Switches to totem slot when going inside the inventory"));
-	private final BooleanSetting forceTotem = new BooleanSetting(EncryptedString.of("Force Totem"), false).setDescription(EncryptedString.of("Puts the totem in the slot, regardless if its space is taken up by something else"));
-	private final BooleanSetting autoOpen = new BooleanSetting(EncryptedString.of("Auto Open"), false)
-			.setDescription(EncryptedString.of("Automatically opens and closes the inventory for you"));
-	private final NumberSetting stayOpenFor = new NumberSetting(EncryptedString.of("Stay Open For"), 0, 20, 0, 1);
+   public AutoInventoryTotem() {
+      super(EncryptedString.of("Auto Inventory Totem"), EncryptedString.of("Automatically equips a totem in your offhand and main hand if empty"), -1, Category.CPVP);
+      this.mode = (ModeSetting)(new ModeSetting(EncryptedString.of("Mode"), AutoInventoryTotem.Mode.Blatant, AutoInventoryTotem.Mode.class)).setDescription(EncryptedString.of("Whether to randomize the toteming pattern or no"));
+      this.delay = new NumberSetting(EncryptedString.of("Delay"), 0.0D, 20.0D, 0.0D, 1.0D);
+      this.hotbar = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Hotbar"), true)).setDescription(EncryptedString.of("Puts a totem in your hotbar as well, if enabled (Setting below will work if this is enabled)"));
+      this.totemSlot = (NumberSetting)(new NumberSetting(EncryptedString.of("Totem Slot"), 1.0D, 9.0D, 1.0D, 1.0D)).setDescription(EncryptedString.of("Your preferred totem slot"));
+      this.autoSwitch = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Auto Switch"), false)).setDescription(EncryptedString.of("Switches to totem slot when going inside the inventory"));
+      this.forceTotem = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Force Totem"), false)).setDescription(EncryptedString.of("Puts the totem in the slot, regardless if its space is taken up by something else"));
+      this.autoOpen = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Auto Open"), false)).setDescription(EncryptedString.of("Automatically opens and closes the inventory for you"));
+      this.stayOpenFor = new NumberSetting(EncryptedString.of("Stay Open For"), 0.0D, 20.0D, 0.0D, 1.0D);
+      this.clock = -1;
+      this.closeClock = -1;
+      this.openTimer = new TimerUtils();
+      this.closeTimer = new TimerUtils();
+      this.addSettings(new Setting[]{this.mode, this.delay, this.hotbar, this.totemSlot, this.autoSwitch, this.forceTotem, this.autoOpen, this.stayOpenFor});
+   }
 
-	int clock = -1;
-	int closeClock = -1;
+   public void onEnable() {
+      this.eventManager.add(TickListener.class, this);
+      this.clock = -1;
+      this.closeClock = -1;
+      super.onEnable();
+   }
 
-	TimerUtils openTimer = new TimerUtils();
-	TimerUtils closeTimer = new TimerUtils();
+   public void onDisable() {
+      this.eventManager.remove(TickListener.class, this);
+      super.onDisable();
+   }
 
-	public AutoInventoryTotem() {
-		super(EncryptedString.of("Autototem-bannable"),
-				EncryptedString.of("Autototem fully automated - easily detected by totemguard"),
-				-1,
-				Category.CRYSTAL);
-		addSettings(mode, delay, hotbar, totemSlot, autoSwitch, forceTotem, autoOpen, stayOpenFor);
-	}
+   public void onTick() {
+      if (this.shouldOpenScreen() && this.autoOpen.getValue()) {
+         mc.method_1507(new FakeInvScreen(mc.field_1724));
+      }
 
-	@Override
-	public void onEnable() {
-		eventManager.add(TickListener.class, this);
-		clock = -1;
-		closeClock = -1;
-		super.onEnable();
-	}
+      if (!(mc.field_1755 instanceof class_490) && !(mc.field_1755 instanceof FakeInvScreen)) {
+         this.clock = -1;
+         this.closeClock = -1;
+      } else {
+         if (this.clock == -1) {
+            this.clock = this.delay.getValueInt();
+         }
 
-	@Override
-	public void onDisable() {
-		eventManager.remove(TickListener.class, this);
-		super.onDisable();
-	}
+         if (this.closeClock == -1) {
+            this.closeClock = this.stayOpenFor.getValueInt();
+         }
 
-	@Override
-	public void onTick() {
-		if (shouldOpenScreen() && autoOpen.getValue())
-			mc.setScreen(new FakeInvScreen(mc.player));
+         if (this.clock > 0) {
+            --this.clock;
+         }
 
-		if (!(mc.currentScreen instanceof InventoryScreen || mc.currentScreen instanceof FakeInvScreen)) {
-			clock = -1;
-			closeClock = -1;
-			return;
-		}
+         class_1661 inventory = mc.field_1724.method_31548();
+         if (this.autoSwitch.getValue()) {
+            inventory.field_7545 = this.totemSlot.getValueInt() - 1;
+         }
 
-		if (clock == -1)
-			clock = delay.getValueInt();
+         if (this.clock <= 0) {
+            if (((class_1799)inventory.field_7544.get(0)).method_7909() != class_1802.field_8288) {
+               int slot = this.mode.isMode(AutoInventoryTotem.Mode.Blatant) ? InventoryUtils.findTotemSlot() : InventoryUtils.findRandomTotemSlot();
+               if (slot != -1) {
+                  mc.field_1761.method_2906(((class_1723)((class_490)mc.field_1755).method_17577()).field_7763, slot, 40, class_1713.field_7791, mc.field_1724);
+                  return;
+               }
+            }
 
-		if (closeClock == -1)
-			closeClock = stayOpenFor.getValueInt();
+            if (this.hotbar.getValue()) {
+               class_1799 mainHand = mc.field_1724.method_6047();
+               if (mainHand.method_7960() || this.forceTotem.getValue() && mainHand.method_7909() != class_1802.field_8288) {
+                  int slot = this.mode.isMode(AutoInventoryTotem.Mode.Blatant) ? InventoryUtils.findTotemSlot() : InventoryUtils.findRandomTotemSlot();
+                  if (slot != -1) {
+                     mc.field_1761.method_2906(((class_1723)((class_490)mc.field_1755).method_17577()).field_7763, slot, inventory.field_7545, class_1713.field_7791, mc.field_1724);
+                     return;
+                  }
+               }
+            }
 
-		if (clock > 0)
-			clock--;
+            if (this.shouldCloseScreen() && this.autoOpen.getValue()) {
+               if (this.closeClock != 0) {
+                  --this.closeClock;
+                  return;
+               }
 
-		PlayerInventory inventory = mc.player.getInventory();
+               mc.field_1755.method_25419();
+               this.closeClock = this.stayOpenFor.getValueInt();
+            }
+         }
 
-		if (autoSwitch.getValue())
-			inventory.selectedSlot = totemSlot.getValueInt() - 1;
+      }
+   }
 
-		if (clock <= 0) {
-			if (inventory.offHand.get(0).getItem() != Items.TOTEM_OF_UNDYING) {
-				int slot = mode.isMode(Mode.Blatant) ? InventoryUtils.findTotemSlot() : InventoryUtils.findRandomTotemSlot();
+   public boolean shouldCloseScreen() {
+      if (this.hotbar.getValue()) {
+         return mc.field_1724.method_31548().method_5438(this.totemSlot.getValueInt() - 1).method_7909() == class_1802.field_8288 && mc.field_1724.method_6079().method_7909() == class_1802.field_8288 && mc.field_1755 instanceof FakeInvScreen;
+      } else {
+         return mc.field_1724.method_6079().method_7909() == class_1802.field_8288 && mc.field_1755 instanceof FakeInvScreen;
+      }
+   }
 
-				if (slot != -1) {
-					mc.interactionManager.clickSlot(((InventoryScreen) mc.currentScreen).getScreenHandler().syncId, slot, 40, SlotActionType.SWAP, mc.player);
-					return;
-				}
-			}
+   public boolean shouldOpenScreen() {
+      if (this.hotbar.getValue()) {
+         return (mc.field_1724.method_6079().method_7909() != class_1802.field_8288 || mc.field_1724.method_31548().method_5438(this.totemSlot.getValueInt() - 1).method_7909() != class_1802.field_8288) && !(mc.field_1755 instanceof FakeInvScreen) && InventoryUtils.countItemExceptHotbar((item) -> {
+            return item == class_1802.field_8288;
+         }) != 0;
+      } else {
+         return mc.field_1724.method_6079().method_7909() != class_1802.field_8288 && !(mc.field_1755 instanceof FakeInvScreen) && InventoryUtils.countItemExceptHotbar((item) -> {
+            return item == class_1802.field_8288;
+         }) != 0;
+      }
+   }
 
-			if(hotbar.getValue()) {
-				ItemStack mainHand = mc.player.getMainHandStack();
-				if (mainHand.isEmpty() || forceTotem.getValue() && mainHand.getItem() != Items.TOTEM_OF_UNDYING) {
-					int slot = mode.isMode(Mode.Blatant) ? InventoryUtils.findTotemSlot() : InventoryUtils.findRandomTotemSlot();
+   public static enum Mode {
+      Blatant,
+      Random;
 
-					if (slot != -1) {
-						mc.interactionManager.clickSlot(((InventoryScreen) mc.currentScreen).getScreenHandler().syncId, slot, inventory.selectedSlot, SlotActionType.SWAP, mc.player);
-						return;
-					}
-				}
-			}
-
-
-			if (shouldCloseScreen() && autoOpen.getValue()) {
-				if (closeClock != 0) {
-					closeClock--;
-					return;
-				}
-
-				mc.currentScreen.close();
-				closeClock = stayOpenFor.getValueInt();
-			}
-		}
-	}
-
-	public boolean shouldCloseScreen() {
-		if(hotbar.getValue())
-			return (mc.player.getInventory().getStack(totemSlot.getValueInt() - 1).getItem() == Items.TOTEM_OF_UNDYING && mc.player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) && mc.currentScreen instanceof FakeInvScreen;
-		else return ( mc.player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) && mc.currentScreen instanceof FakeInvScreen;
-	}
-
-	public boolean shouldOpenScreen() {
-		if(hotbar.getValue())
-			return (mc.player.getOffHandStack().getItem() != Items.TOTEM_OF_UNDYING || mc.player.getInventory().getStack(totemSlot.getValueInt() - 1).getItem() != Items.TOTEM_OF_UNDYING)
-					&& !(mc.currentScreen instanceof FakeInvScreen) && InventoryUtils.countItemExceptHotbar(item -> item == Items.TOTEM_OF_UNDYING) != 0;
-		else return (mc.player.getOffHandStack().getItem() != Items.TOTEM_OF_UNDYING && !(mc.currentScreen instanceof FakeInvScreen) && InventoryUtils.countItemExceptHotbar(item -> item == Items.TOTEM_OF_UNDYING) != 0);
-	}
+      // $FF: synthetic method
+      private static AutoInventoryTotem.Mode[] $values() {
+         return new AutoInventoryTotem.Mode[]{Blatant, Random};
+      }
+   }
 }

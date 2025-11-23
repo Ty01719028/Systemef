@@ -1,248 +1,227 @@
-package dlindustries.vigillant.system.module.modules.crystal;
+package dev.potato.lucid.module.modules.cpvp;
 
-import dlindustries.vigillant.system.event.events.ItemUseListener;
-import dlindustries.vigillant.system.event.events.TickListener;
-import dlindustries.vigillant.system.module.Category;
-import dlindustries.vigillant.system.module.Module;
-import dlindustries.vigillant.system.module.setting.BooleanSetting;
-import dlindustries.vigillant.system.module.setting.KeybindSetting;
-import dlindustries.vigillant.system.module.setting.NumberSetting;
-import dlindustries.vigillant.system.utils.*;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.decoration.EndCrystalEntity;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.SlimeEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Items;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.Direction;
-import org.lwjgl.glfw.GLFW;
+import dev.potato.lucid.event.events.ItemUseListener;
+import dev.potato.lucid.event.events.TickListener;
+import dev.potato.lucid.module.Category;
+import dev.potato.lucid.module.Module;
+import dev.potato.lucid.module.setting.BooleanSetting;
+import dev.potato.lucid.module.setting.KeybindSetting;
+import dev.potato.lucid.module.setting.NumberSetting;
+import dev.potato.lucid.module.setting.Setting;
+import dev.potato.lucid.utils.BlockUtils;
+import dev.potato.lucid.utils.CrystalUtils;
+import dev.potato.lucid.utils.EncryptedString;
+import dev.potato.lucid.utils.InventoryUtils;
+import dev.potato.lucid.utils.KeyUtils;
+import dev.potato.lucid.utils.MathUtils;
+import dev.potato.lucid.utils.MouseSimulation;
+import dev.potato.lucid.utils.WorldUtils;
+import net.minecraft.class_1268;
+import net.minecraft.class_1293;
+import net.minecraft.class_1294;
+import net.minecraft.class_1297;
+import net.minecraft.class_1511;
+import net.minecraft.class_1621;
+import net.minecraft.class_1657;
+import net.minecraft.class_1802;
+import net.minecraft.class_2246;
+import net.minecraft.class_2350;
+import net.minecraft.class_239;
+import net.minecraft.class_3965;
+import net.minecraft.class_3966;
+import net.minecraft.class_239.class_240;
 
 public final class AutoCrystal extends Module implements TickListener, ItemUseListener {
-	private final KeybindSetting activateKey = new KeybindSetting(EncryptedString.of("Activate Key"), GLFW.GLFW_MOUSE_BUTTON_RIGHT, false)
-			.setDescription(EncryptedString.of("Key that does the crystalling"));
+   private final KeybindSetting activateKey = (KeybindSetting)(new KeybindSetting(EncryptedString.of("Activate Key"), 1, false)).setDescription(EncryptedString.of("Key that does the crystalling"));
+   private final NumberSetting placeDelay = new NumberSetting(EncryptedString.of("Place Delay"), 0.0D, 20.0D, 0.0D, 1.0D);
+   private final NumberSetting breakDelay = new NumberSetting(EncryptedString.of("Break Delay"), 0.0D, 20.0D, 0.0D, 1.0D);
+   private final NumberSetting placeChance = (NumberSetting)(new NumberSetting(EncryptedString.of("Place Chance"), 0.0D, 100.0D, 100.0D, 1.0D)).setDescription(EncryptedString.of("Randomization"));
+   private final NumberSetting breakChance = (NumberSetting)(new NumberSetting(EncryptedString.of("Break Chance"), 0.0D, 100.0D, 100.0D, 1.0D)).setDescription(EncryptedString.of("Randomization"));
+   private final BooleanSetting stopOnKill = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Stop on Kill"), false)).setDescription(EncryptedString.of("Won't crystal if a dead player is nearby"));
+   private final BooleanSetting fakePunch = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Fake Punch"), false)).setDescription(EncryptedString.of("Will hit every entity and block if you miss a hitcrystal"));
+   private final BooleanSetting clickSimulation = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Click Simulation"), false)).setDescription(EncryptedString.of("Makes the CPS hud think you're legit"));
+   private final BooleanSetting damageTick = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Damage Tick"), false)).setDescription(EncryptedString.of("Times your crystals for a perfect d-tap"));
+   private final BooleanSetting antiWeakness = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Anti-Weakness"), false)).setDescription(EncryptedString.of("Silently switches to a sword and then hits the crystal if you have weakness"));
+   private final NumberSetting particleChance = (NumberSetting)(new NumberSetting(EncryptedString.of("Particle Chance"), 0.0D, 100.0D, 20.0D, 1.0D)).setDescription(EncryptedString.of("Adds block breaking particles to make it seem more legit from your POV (Only works with fake punch)"));
+   private int placeClock;
+   private int breakClock;
+   public boolean crystalling;
 
-	private final NumberSetting placeDelay = new NumberSetting(EncryptedString.of("Place Delay"), 0, 20, 2, 1);
-	private final NumberSetting breakDelay = new NumberSetting(EncryptedString.of("Break Delay"), 0, 20, 2, 1);
+   public AutoCrystal() {
+      super(EncryptedString.of("Auto Crystal"), EncryptedString.of("Automatically crystals fast for you"), -1, Category.CPVP);
+      this.addSettings(new Setting[]{this.activateKey, this.placeDelay, this.breakDelay, this.placeChance, this.breakChance, this.stopOnKill, this.fakePunch, this.clickSimulation, this.damageTick, this.antiWeakness, this.particleChance});
+   }
 
-	private final NumberSetting placeChance = new NumberSetting(EncryptedString.of("Place Chance"), 0, 100, 100, 1)
-			.setDescription(EncryptedString.of("Randomization"));
-	private final NumberSetting breakChance = new NumberSetting(EncryptedString.of("Break Chance"), 0, 100, 100, 1)
-			.setDescription(EncryptedString.of("Randomization"));
+   public void onEnable() {
+      this.eventManager.add(TickListener.class, this);
+      this.eventManager.add(ItemUseListener.class, this);
+      this.placeClock = 0;
+      this.breakClock = 0;
+      this.crystalling = false;
+      super.onEnable();
+   }
 
-	private final BooleanSetting LootProtect = new BooleanSetting(EncryptedString.of("Loot protect"), false)
-			.setDescription(EncryptedString.of("Won't crystal if a dead player is nearby"));
-	private final BooleanSetting fakePunch = new BooleanSetting(EncryptedString.of("Fake Punch"), false)
-			.setDescription(EncryptedString.of("Will hit every entity and block if you miss a hitcrystal"));
-	private final BooleanSetting clickSimulation = new BooleanSetting(EncryptedString.of("Click Simulation"), true)
-			.setDescription(EncryptedString.of("Makes the CPS hud think you're legit"));
-	private final BooleanSetting damageTick = new BooleanSetting(EncryptedString.of("Damage Tick"), false)
-			.setDescription(EncryptedString.of("Times your crystals for a perfect d-tap"));
-	private final BooleanSetting antiWeakness = new BooleanSetting(EncryptedString.of("Anti-Weakness"), false)
-			.setDescription(EncryptedString.of("Silently switches to a sword and then hits the crystal if you have weakness"));
+   public void onDisable() {
+      this.eventManager.remove(TickListener.class, this);
+      this.eventManager.remove(ItemUseListener.class, this);
+      super.onDisable();
+   }
 
-	private final NumberSetting particleChance = new NumberSetting(EncryptedString.of("Particle Chance"), 0, 100, 20, 1)
-			.setDescription(EncryptedString.of("Adds block breaking particles to make it seem more legit from your POV (Only works with fake punch)"));
+   public void onTick() {
+      if (mc.field_1755 == null) {
+         boolean dontPlace = this.placeClock != 0;
+         boolean dontBreak = this.breakClock != 0;
+         if (!this.stopOnKill.getValue() || !WorldUtils.isDeadBodyNearby()) {
+            int randomInt = MathUtils.randomInt(1, 100);
+            if (dontPlace) {
+               --this.placeClock;
+            }
 
-	private int placeClock;
-	private int breakClock;
-	public boolean crystalling;
+            if (dontBreak) {
+               --this.breakClock;
+            }
 
-	public AutoCrystal() {
-		super(EncryptedString.of("Auto Crystal"),
-				EncryptedString.of("Automatically crystals fast for you"),
-				-1,
-				Category.CRYSTAL);
-		addSettings(activateKey, placeDelay, breakDelay, placeChance, breakChance, LootProtect, fakePunch, clickSimulation, damageTick, antiWeakness, particleChance);
-	}
+            if (!mc.field_1724.method_6115()) {
+               if (!this.damageTick.getValue() || !this.damageTickCheck()) {
+                  if (this.activateKey.getKey() != -1 && !KeyUtils.isKeyPressed(this.activateKey.getKey())) {
+                     this.placeClock = 0;
+                     this.breakClock = 0;
+                     this.crystalling = false;
+                  } else {
+                     this.crystalling = true;
+                     if (mc.field_1724.method_6047().method_7909() == class_1802.field_8301) {
+                        class_239 var5 = mc.field_1765;
+                        if (var5 instanceof class_3965) {
+                           class_3965 hit = (class_3965)var5;
+                           if (mc.field_1765.method_17783() == class_240.field_1332) {
+                              if (!dontPlace && randomInt <= this.placeChance.getValueInt() && (BlockUtils.isBlock(hit.method_17777(), class_2246.field_10540) || BlockUtils.isBlock(hit.method_17777(), class_2246.field_9987) && CrystalUtils.canPlaceCrystalClientAssumeObsidian(hit.method_17777()))) {
+                                 if (this.clickSimulation.getValue()) {
+                                    MouseSimulation.mouseClick(1);
+                                 }
 
-	@Override
-	public void onEnable() {
-		eventManager.add(TickListener.class, this);
-		eventManager.add(ItemUseListener.class, this);
+                                 WorldUtils.placeBlock(hit, true);
+                                 if (this.fakePunch.getValue() && (double)randomInt <= this.particleChance.getValue() && CrystalUtils.canPlaceCrystalClientAssumeObsidian(hit.method_17777()) && hit.method_17780() == class_2350.field_11036) {
+                                    mc.field_1713.method_3054(hit.method_17777(), hit.method_17780());
+                                 }
 
-		placeClock = 0;
-		breakClock = 0;
-		crystalling = false;
-		super.onEnable();
-	}
+                                 this.placeClock = this.placeDelay.getValueInt();
+                              }
 
-	@Override
-	public void onDisable() {
-		eventManager.remove(TickListener.class, this);
-		eventManager.remove(ItemUseListener.class, this);
-		super.onDisable();
-	}
+                              if (this.fakePunch.getValue()) {
+                                 if (!dontBreak && randomInt <= this.breakChance.getValueInt()) {
+                                    if (BlockUtils.isBlock(hit.method_17777(), class_2246.field_10540) || BlockUtils.isBlock(hit.method_17777(), class_2246.field_9987)) {
+                                       return;
+                                    }
 
-	@Override
-	public void onTick() {
-		if (mc.currentScreen != null)
-			return;
+                                    if (this.clickSimulation.getValue()) {
+                                       if (!BlockUtils.isBlock(hit.method_17777(), class_2246.field_10540) && !BlockUtils.isBlock(hit.method_17777(), class_2246.field_9987)) {
+                                          MouseSimulation.mouseClick(0);
+                                       } else if (CrystalUtils.canPlaceCrystalClientAssumeObsidian(hit.method_17777())) {
+                                          MouseSimulation.mouseClick(0);
+                                       }
+                                    }
 
-		boolean dontPlace = (placeClock != 0);
-		boolean dontBreak = (breakClock != 0);
+                                    mc.field_1761.method_2910(hit.method_17777(), hit.method_17780());
+                                    mc.field_1724.method_6104(class_1268.field_5808);
+                                    mc.field_1713.method_3054(hit.method_17777(), hit.method_17780());
+                                    mc.field_1761.method_2902(hit.method_17777(), hit.method_17780());
+                                    this.breakClock = this.breakDelay.getValueInt();
+                                 }
 
-		if (LootProtect.getValue() &&
-				(WorldUtils.isDeadBodyNearby() || WorldUtils.isValuableLootNearby())) {
-			return;
-		}
+                                 if (!dontPlace && randomInt <= this.placeChance.getValueInt() && dontBreak && this.clickSimulation.getValue()) {
+                                    MouseSimulation.mouseClick(1);
+                                 }
+                              }
+                           }
 
-		int randomInt = MathUtils.randomInt(1, 100);
+                           if (mc.field_1765.method_17783() == class_240.field_1333 && this.fakePunch.getValue()) {
+                              if (!dontBreak && randomInt <= this.breakChance.getValueInt()) {
+                                 if (mc.field_1761.method_2924()) {
+                                    mc.field_1771 = 10;
+                                 }
 
-		if (dontPlace)
-			placeClock--;
+                                 if (this.clickSimulation.getValue()) {
+                                    MouseSimulation.mouseClick(0);
+                                 }
 
-		if (dontBreak)
-			breakClock--;
+                                 mc.field_1724.method_7350();
+                                 mc.field_1724.method_6104(class_1268.field_5808);
+                                 this.breakClock = this.breakDelay.getValueInt();
+                              }
 
-		if (mc.player.isUsingItem())
-			return;
+                              if (!dontPlace && randomInt <= this.placeChance.getValueInt() && dontBreak && this.clickSimulation.getValue()) {
+                                 MouseSimulation.mouseClick(1);
+                              }
+                           }
+                        }
 
-		if (damageTick.getValue() && damageTickCheck())
-			return;
+                        randomInt = MathUtils.randomInt(1, 100);
+                        var5 = mc.field_1765;
+                        if (var5 instanceof class_3966) {
+                           class_3966 hit = (class_3966)var5;
+                           if (!dontBreak && randomInt <= this.breakChance.getValueInt()) {
+                              class_1297 entity = hit.method_17782();
+                              if (!this.fakePunch.getValue() && !(entity instanceof class_1511) && !(entity instanceof class_1621)) {
+                                 return;
+                              }
 
-		if (activateKey.getKey() != -1 && !KeyUtils.isKeyPressed(activateKey.getKey())) {
-			placeClock = 0;
-			breakClock = 0;
-			crystalling = false;
-			return;
-		} else crystalling = true;
+                              int previousSlot = mc.field_1724.method_31548().field_7545;
+                              if ((entity instanceof class_1511 || entity instanceof class_1621) && this.antiWeakness.getValue() && this.cantBreakCrystal()) {
+                                 InventoryUtils.selectSword();
+                              }
 
-		if (mc.player.getMainHandStack().getItem() != Items.END_CRYSTAL)
-			return;
+                              if (this.clickSimulation.getValue()) {
+                                 MouseSimulation.mouseClick(0);
+                              }
 
-		if (mc.crosshairTarget instanceof BlockHitResult hit) {
-			if (mc.crosshairTarget.getType() == HitResult.Type.BLOCK) {
+                              WorldUtils.hitEntity(entity, true);
+                              this.breakClock = this.breakDelay.getValueInt();
+                              if (this.antiWeakness.getValue()) {
+                                 InventoryUtils.setInvSlot(previousSlot);
+                              }
+                           }
+                        }
 
-				if (!dontPlace && randomInt <= placeChance.getValueInt()) {
-					if (BlockUtils.isBlock(hit.getBlockPos(), Blocks.OBSIDIAN) || BlockUtils.isBlock(hit.getBlockPos(), Blocks.BEDROCK) && CrystalUtils.canPlaceCrystalClientAssumeObsidian(hit.getBlockPos())) {
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
 
-						if (clickSimulation.getValue())
-							MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+   public void onItemUse(ItemUseListener.ItemUseEvent event) {
+      if (mc.field_1724.method_6047().method_7909() == class_1802.field_8301) {
+         class_239 var3 = mc.field_1765;
+         if (var3 instanceof class_3965) {
+            class_3965 h = (class_3965)var3;
+            if (mc.field_1765.method_17783() == class_240.field_1332 && (BlockUtils.isBlock(h.method_17777(), class_2246.field_10540) || BlockUtils.isBlock(h.method_17777(), class_2246.field_9987))) {
+               event.cancel();
+            }
+         }
+      }
 
-						WorldUtils.placeBlock(hit, true);
+   }
 
-						if (fakePunch.getValue()) {
-							if (randomInt <= particleChance.getValue())
-								if (CrystalUtils.canPlaceCrystalClientAssumeObsidian(hit.getBlockPos()) && hit.getSide() == Direction.UP)
-									mc.particleManager.addBlockBreakingParticles(hit.getBlockPos(), hit.getSide());
-						}
+   private boolean cantBreakCrystal() {
+      assert mc.field_1724 != null;
 
-						placeClock = placeDelay.getValueInt();
-					}
-				}
+      class_1293 weakness = mc.field_1724.method_6112(class_1294.field_5911);
+      class_1293 strength = mc.field_1724.method_6112(class_1294.field_5910);
+      return weakness != null && (strength == null || strength.method_5578() <= weakness.method_5578()) && !WorldUtils.isTool(mc.field_1724.method_6047());
+   }
 
-				if (fakePunch.getValue()) {
-					if (!dontBreak && randomInt <= breakChance.getValueInt()) {
-
-						if (BlockUtils.isBlock(hit.getBlockPos(), Blocks.OBSIDIAN) || BlockUtils.isBlock(hit.getBlockPos(), Blocks.BEDROCK))
-							return;
-
-						if (clickSimulation.getValue()) {
-							if (BlockUtils.isBlock(hit.getBlockPos(), Blocks.OBSIDIAN) || BlockUtils.isBlock(hit.getBlockPos(), Blocks.BEDROCK)) {
-								if (CrystalUtils.canPlaceCrystalClientAssumeObsidian(hit.getBlockPos()))
-									MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-							} else MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-						}
-
-						mc.interactionManager.attackBlock(hit.getBlockPos(), hit.getSide());
-						mc.player.swingHand(Hand.MAIN_HAND);
-						mc.particleManager.addBlockBreakingParticles(hit.getBlockPos(), hit.getSide());
-						mc.interactionManager.updateBlockBreakingProgress(hit.getBlockPos(), hit.getSide());
-
-						breakClock = breakDelay.getValueInt();
-					}
-
-					if (!dontPlace && randomInt <= placeChance.getValueInt() && dontBreak) {
-						if (clickSimulation.getValue())
-							MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-					}
-				}
-			}
-
-			if (mc.crosshairTarget.getType() == HitResult.Type.MISS) {
-				if (fakePunch.getValue()) {
-					if (!dontBreak && randomInt <= breakChance.getValueInt()) {
-						if (mc.interactionManager.hasLimitedAttackSpeed())
-							mc.attackCooldown = 10;
-
-						if (clickSimulation.getValue())
-							MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-
-						mc.player.resetLastAttackedTicks();
-						mc.player.swingHand(Hand.MAIN_HAND);
-
-						breakClock = breakDelay.getValueInt();
-					}
-
-					if (!dontPlace && randomInt <= placeChance.getValueInt() && dontBreak) {
-						if (clickSimulation.getValue())
-							MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-					}
-				}
-			}
-		}
-
-		randomInt = MathUtils.randomInt(1, 100);
-
-		if (mc.crosshairTarget instanceof EntityHitResult hit) {
-			if (!dontBreak && randomInt <= breakChance.getValueInt()) {
-				Entity entity = hit.getEntity();
-
-				if (!fakePunch.getValue() && !(entity instanceof EndCrystalEntity || entity instanceof SlimeEntity))
-					return;
-
-				int previousSlot = mc.player.getInventory().selectedSlot;
-
-				if(entity instanceof EndCrystalEntity || entity instanceof SlimeEntity)
-					if(antiWeakness.getValue() && cantBreakCrystal())
-						InventoryUtils.selectSword();
-
-				if (clickSimulation.getValue())
-					MouseSimulation.mouseClick(GLFW.GLFW_MOUSE_BUTTON_LEFT);
-
-				WorldUtils.hitEntity(entity, true);
-				breakClock = breakDelay.getValueInt();
-
-				if(antiWeakness.getValue())
-					InventoryUtils.setInvSlot(previousSlot);
-			}
-		}
-	}
-
-
-	@Override
-	public void onItemUse(ItemUseEvent event) {
-		if (mc.player.getMainHandStack().getItem() == Items.END_CRYSTAL) {
-			if ((mc.crosshairTarget instanceof BlockHitResult h
-					&& mc.crosshairTarget.getType() == HitResult.Type.BLOCK
-					&& (BlockUtils.isBlock(h.getBlockPos(), Blocks.OBSIDIAN) || BlockUtils.isBlock(h.getBlockPos(), Blocks.BEDROCK)))) {
-				event.cancel();
-			}
-		}
-	}
-
-	private boolean cantBreakCrystal() {
-        assert mc.player != null;
-        StatusEffectInstance weakness = mc.player.getStatusEffect(StatusEffects.WEAKNESS);
-		StatusEffectInstance strength = mc.player.getStatusEffect(StatusEffects.STRENGTH);
-		return (!(weakness == null || strength != null && strength.getAmplifier() > weakness.getAmplifier() || WorldUtils.isTool(mc.player.getMainHandStack())));
-	}
-
-	private boolean damageTickCheck() {
-		return mc.world.getPlayers().parallelStream()
-				.filter(e -> e != mc.player)
-				.filter(e -> e.squaredDistanceTo(mc.player) < 36)
-				.filter(e -> e.getLastAttacker() == null)
-				.filter(e -> !e.isOnGround())
-				.anyMatch(e -> e.hurtTime >= 2)
-
-				&& !(mc.player.getAttacking() instanceof PlayerEntity);
-	}
+   private boolean damageTickCheck() {
+      return mc.field_1687.method_18456().parallelStream().filter((e) -> {
+         return e != mc.field_1724;
+      }).filter((e) -> {
+         return e.method_5858(mc.field_1724) < 36.0D;
+      }).filter((e) -> {
+         return e.method_49107() == null;
+      }).filter((e) -> {
+         return !e.method_24828();
+      }).anyMatch((e) -> {
+         return e.field_6235 >= 2;
+      }) && !(mc.field_1724.method_6052() instanceof class_1657);
+   }
 }
-

@@ -1,109 +1,82 @@
-package dlindustries.vigillant.system.module.modules.crystal;
+package dev.potato.lucid.module.modules.cpvp;
 
-import dlindustries.vigillant.system.event.events.TickListener;
-import dlindustries.vigillant.system.mixin.HandledScreenMixin;
-import dlindustries.vigillant.system.module.Category;
-import dlindustries.vigillant.system.module.Module;
-import dlindustries.vigillant.system.module.setting.BooleanSetting;
-import dlindustries.vigillant.system.module.setting.NumberSetting;
-import dlindustries.vigillant.system.utils.EncryptedString;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.item.Items;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
-
-import java.util.concurrent.ThreadLocalRandom;
+import dev.potato.lucid.event.events.TickListener;
+import dev.potato.lucid.mixin.J;
+import dev.potato.lucid.module.Category;
+import dev.potato.lucid.module.Module;
+import dev.potato.lucid.module.setting.BooleanSetting;
+import dev.potato.lucid.module.setting.NumberSetting;
+import dev.potato.lucid.module.setting.Setting;
+import dev.potato.lucid.utils.EncryptedString;
+import net.minecraft.class_1713;
+import net.minecraft.class_1723;
+import net.minecraft.class_1735;
+import net.minecraft.class_1802;
+import net.minecraft.class_437;
+import net.minecraft.class_490;
 
 public final class HoverTotem extends Module implements TickListener {
-	private final NumberSetting delay = new NumberSetting(EncryptedString.of("Delay"), 0, 20, 1, 1);
-	private final BooleanSetting hotbar = new BooleanSetting(EncryptedString.of("Hotbar"), true)
-			.setDescription(EncryptedString.of("Puts a totem in your hotbar as well"));
-	private final NumberSetting slot = new NumberSetting(EncryptedString.of("Totem Slot"), 1, 9, 9, 1)
-			.setDescription(EncryptedString.of("Your preferred hotbar slot for totems"));
-	private final BooleanSetting dynamicDelay = new BooleanSetting(EncryptedString.of("Dynamic Delay"), true)
-			.setDescription(EncryptedString.of("Adds further random timing variations to avoid detection"));
+   private final NumberSetting delay = new NumberSetting(EncryptedString.of("Delay"), 0.0D, 20.0D, 0.0D, 1.0D);
+   private final BooleanSetting hotbar = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Hotbar"), true)).setDescription(EncryptedString.of("Puts a totem in your hotbar as well, if enabled (Setting below will work if this is enabled)"));
+   private final NumberSetting slot = (NumberSetting)(new NumberSetting(EncryptedString.of("Totem Slot"), 1.0D, 9.0D, 1.0D, 1.0D)).setDescription(EncryptedString.of("Your preferred totem slot"));
+   private final BooleanSetting autoSwitch = (BooleanSetting)(new BooleanSetting(EncryptedString.of("Auto Switch"), false)).setDescription(EncryptedString.of("Switches to totem slot when going inside the inventory"));
+   private int clock;
 
-	private int clock;
-	private boolean safeMode;
+   public HoverTotem() {
+      super(EncryptedString.of("Hover Totem"), EncryptedString.of("Equips a totem in your totem and offhand slots if a totem is hovered"), -1, Category.CPVP);
+      this.addSettings(new Setting[]{this.delay, this.hotbar, this.slot, this.autoSwitch});
+   }
 
-	public HoverTotem() {
-		super(EncryptedString.of("Autototem - legit"),
-				EncryptedString.of("Equips totems when hovered - optimized and perfected with DhandMod module and predict double hand"),
-				-1,
-				Category.CRYSTAL);
-		addSettings(delay, hotbar, slot, dynamicDelay);
-	}
+   public void onEnable() {
+      this.eventManager.add(TickListener.class, this);
+      this.clock = 0;
+      super.onEnable();
+   }
 
-	@Override
-	public void onEnable() {
-		eventManager.add(TickListener.class, this);
-		clock = 0;
-		safeMode = false;
-		super.onEnable();
-	}
+   public void onDisable() {
+      this.eventManager.remove(TickListener.class, this);
+      super.onDisable();
+   }
 
-	@Override
-	public void onDisable() {
-		eventManager.remove(TickListener.class, this);
-		super.onDisable();
-	}
+   public void onTick() {
+      class_437 var2 = mc.field_1755;
+      if (var2 instanceof class_490) {
+         class_490 inv = (class_490)var2;
+         class_1735 hoveredSlot = ((J)inv).getFocusedSlot();
+         if (this.autoSwitch.getValue()) {
+            mc.field_1724.method_31548().field_7545 = this.slot.getValueInt() - 1;
+         }
 
-	@Override
-	public void onTick() {
-		if (!(mc.currentScreen instanceof InventoryScreen inv)) {
-			clock = delay.getValueInt();
-			safeMode = false; // Reset safe mode when exiting inventory
-			return;
-		}
-		boolean offhandTotem = mc.player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING);
-		int hotbarSlotIndex = slot.getValueInt() - 1;
-		boolean hotbarTotem = mc.player.getInventory().getStack(hotbarSlotIndex).isOf(Items.TOTEM_OF_UNDYING);
-		safeMode = offhandTotem && hotbarTotem;
+         if (hoveredSlot != null) {
+            int slot = hoveredSlot.method_34266();
+            if (slot > 35) {
+               return;
+            }
 
-		Slot hoveredSlot = ((HandledScreenMixin) inv).getFocusedSlot();
-		if (hoveredSlot == null || hoveredSlot.getIndex() > 35) return;
+            int totem = this.slot.getValueInt() - 1;
+            if (hoveredSlot.method_7677().method_7909() == class_1802.field_8288) {
+               if (this.hotbar.getValue() && mc.field_1724.method_31548().method_5438(totem).method_7909() != class_1802.field_8288) {
+                  if (this.clock > 0) {
+                     --this.clock;
+                     return;
+                  }
 
-		if (hoveredSlot.getStack().getItem() == Items.TOTEM_OF_UNDYING) {
-			if (clock > 0) {
-				clock--;
-				return;
-			}
+                  mc.field_1761.method_2906(((class_1723)inv.method_17577()).field_7763, slot, totem, class_1713.field_7791, mc.field_1724);
+                  this.clock = this.delay.getValueInt();
+               } else if (!mc.field_1724.method_6079().method_31574(class_1802.field_8288)) {
+                  if (this.clock > 0) {
+                     --this.clock;
+                     return;
+                  }
 
-			executeTotemSwap(inv, hoveredSlot);
-			clock = getDynamicDelay();
-		}
-	}
+                  mc.field_1761.method_2906(((class_1723)inv.method_17577()).field_7763, slot, 40, class_1713.field_7791, mc.field_1724);
+                  this.clock = this.delay.getValueInt();
+               }
+            }
+         }
+      } else {
+         this.clock = this.delay.getValueInt();
+      }
 
-	private int getDynamicDelay() {
-		int base = delay.getValueInt();
-		if (safeMode) {
-			base += 1; // Add 50ms (1 tick) delay in safe mode
-		}
-		if (dynamicDelay.getValue()) {
-			return Math.max(0, base + ThreadLocalRandom.current().nextInt(-2, 3));
-		} else {
-			return Math.max(0, base);
-		}
-	}
-
-	private void performSwap(InventoryScreen inv, int from, int to) {
-		mc.interactionManager.clickSlot(
-				inv.getScreenHandler().syncId,
-				from,
-				to,
-				SlotActionType.SWAP,
-				mc.player
-		);
-	}
-
-	private void executeTotemSwap(InventoryScreen inv, Slot hoveredSlot) {
-		int hotbarSlot = slot.getValueInt() - 1;
-
-
-		if (!mc.player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING)) {
-			performSwap(inv, hoveredSlot.getIndex(), 40);
-		} else if (hotbar.getValue() && mc.player.getInventory().getStack(hotbarSlot).getItem() != Items.TOTEM_OF_UNDYING) {
-			performSwap(inv, hoveredSlot.getIndex(), hotbarSlot);
-		}
-	}
+   }
 }
