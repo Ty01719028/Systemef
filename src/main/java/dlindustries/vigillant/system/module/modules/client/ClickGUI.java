@@ -65,7 +65,7 @@ public final class ClickGUI extends Module implements PacketReceiveListener {
 	}
 
 	public ClickGUI() {
-		super(EncryptedString.of("System"),
+		super(EncryptedString.of("CrCoNi"),
 				EncryptedString.of("Improved fork from Argon Client, dedicated for Vanilla Pvp while bypassing all modern anticheat solutions"),
 				GLFW.GLFW_KEY_RIGHT_SHIFT,
 				Category.CLIENT);
